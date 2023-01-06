@@ -33,9 +33,12 @@ import os
 import platform
 import sys
 from pathlib import Path
-
+import numpy as np
 import torch
-
+import pytesseract
+import cv2
+from PIL import Image
+pytesseract.pytesseract.tesseract_cmd = 'C:\\Program Files\\Tesseract-OCR\\tesseract.exe'
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLOv5 root directory
 if str(ROOT) not in sys.path:
@@ -48,8 +51,21 @@ from utils.general import (LOGGER, Profile, check_file, check_img_size, check_im
                            increment_path, non_max_suppression, print_args, scale_boxes, strip_optimizer, xyxy2xywh)
 from utils.plots import Annotator, colors, save_one_box
 from utils.torch_utils import select_device, smart_inference_mode
+from skimage.filters import median
+
+def process_image_for_ocr(img):
+
+    #img = cv2.morphologyEx(src=img, op=cv2.MORPH_OPEN, kernel=np.ones((5, 5), np.uint8),)
+
+    #img = cv2.normalize(img, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
+    #res, img = cv2.threshold(img, 64, 255, cv2.THRESH_BINARY)
 
 
+    #img = cv2.GaussianBlur(src=img, ksize=(11, 11), sigmaX=0, sigmaY=0,)
+    img = cv2.cvtColor(src=img, code=cv2.COLOR_RGB2GRAY, )
+    img = cv2.adaptiveThreshold(src=img,maxValue=255,adaptiveMethod=cv2.ADAPTIVE_THRESH_GAUSSIAN_C,thresholdType=cv2.THRESH_BINARY,blockSize=11, C=3,)
+    img = median(img, np.ones(3, 3), mode='constant', cval=0.0)
+    return img
 @smart_inference_mode()
 def run(
         weights=ROOT / 'yolov5s.pt',  # model path or triton URL
@@ -80,6 +96,7 @@ def run(
         dnn=False,  # use OpenCV DNN for ONNX inference
         vid_stride=1,  # video frame-rate stride
 ):
+    textLabel = ""
     source = str(source)
     save_img = not nosave and not source.endswith('.txt')  # save inference images
     is_file = Path(source).suffix[1:] in (IMG_FORMATS + VID_FORMATS)
@@ -112,6 +129,7 @@ def run(
     vid_path, vid_writer = [None] * bs, [None] * bs
 
     # Run inference
+
     model.warmup(imgsz=(1 if pt or model.triton else bs, 3, *imgsz))  # warmup
     seen, windows, dt = 0, [], (Profile(), Profile(), Profile())
     for path, im, im0s, vid_cap, s in dataset:
@@ -161,6 +179,14 @@ def run(
 
                 # Write results
                 for *xyxy, conf, cls in reversed(det):
+                    if int(cls) == 0:
+                        for k in range(len(det)):
+                            x, y, w, h = int(xyxy[0]), int(xyxy[1]), int(xyxy[2] - xyxy[0]), int(xyxy[3] - xyxy[1])
+                            img_ = im0.astype(np.uint8)
+                            crop_img = img_[y:y + h, x:x + w]
+                            if len(crop_img)!=0:
+                                cv2.imwrite(save_path+".jpg-crop.jpg", process_image_for_ocr(crop_img))
+                                textLabel = pytesseract.image_to_string(process_image_for_ocr(crop_img))
                     if save_txt:  # Write to file
                         xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
                         line = (cls, *xywh, conf) if save_conf else (cls, *xywh)  # label format
@@ -169,7 +195,7 @@ def run(
 
                     if save_img or save_crop or view_img:  # Add bbox to image
                         c = int(cls)  # integer class
-                        label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')
+                        label = None if hide_labels else (names[c] if hide_conf else textLabel) #f'{names[c]} {conf:.2f}'
                         annotator.box_label(xyxy, label, color=colors(c, True))
                     if save_crop:
                         save_one_box(xyxy, imc, file=save_dir / 'crops' / names[c] / f'{p.stem}.jpg', BGR=True)
