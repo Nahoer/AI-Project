@@ -1,6 +1,6 @@
-train: images/train/ 
-val:  images/val/
-test: images/test/
+train: data/images/train/ 
+val:  data/images/val/
+test: data/images/test/
 
 # number of classes
 nc: 1
