@@ -51,7 +51,6 @@ from utils.general import (LOGGER, Profile, check_file, check_img_size, check_im
                            increment_path, non_max_suppression, print_args, scale_boxes, strip_optimizer, xyxy2xywh)
 from utils.plots import Annotator, colors, save_one_box
 from utils.torch_utils import select_device, smart_inference_mode
-from skimage.filters import median
 
 def process_image_for_ocr(img):
 
@@ -64,7 +63,7 @@ def process_image_for_ocr(img):
     #img = cv2.GaussianBlur(src=img, ksize=(11, 11), sigmaX=0, sigmaY=0,)
     img = cv2.cvtColor(src=img, code=cv2.COLOR_RGB2GRAY, )
     img = cv2.adaptiveThreshold(src=img,maxValue=255,adaptiveMethod=cv2.ADAPTIVE_THRESH_GAUSSIAN_C,thresholdType=cv2.THRESH_BINARY,blockSize=11, C=3,)
-    img = median(img, np.ones(3, 3), mode='constant', cval=0.0)
+
     return img
 @smart_inference_mode()
 def run(
